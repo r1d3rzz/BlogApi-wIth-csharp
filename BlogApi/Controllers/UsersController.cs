@@ -1,4 +1,5 @@
-﻿using BlogApi.Models;
+﻿using BlogApi.Helpers;
+using BlogApi.Models;
 using log4net;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -61,7 +62,7 @@ namespace BlogApi.Controllers
                 bool hasFile = user.File != null ? true : false;
                 bool hasEmail = await EmailExists(user.Email);
                 string filename = "";
-                
+
                 if (hasFile)
                     filename = await WriteFile(user.File);
 
@@ -71,12 +72,16 @@ namespace BlogApi.Controllers
                     return Ok("Your Email is Already Exists");
                 }
 
+
+                string salt = PasswordManager.GenerateSalt();
+                string hashedPassword = PasswordManager.HashPassword(user.Password, salt);
+
                 var newUser = new User()
                 {
                     Name = user.Name,
                     Email = user.Email,
                     Phone = user.Phone,
-                    Password = user.Password,
+                    Password = hashedPassword + salt,
                     Image = hasFile == true ? filename : null,
                 };
 
@@ -97,35 +102,49 @@ namespace BlogApi.Controllers
         {
             try
             {
+                string newHashedPassword = "";
                 var user = await context.Users.FindAsync(id);
                 bool hasEmail = await EmailExists(requestUser.Email);
-                
+
                 if (user == null)
                 {
                     return NotFound();
                 }
 
                 if (!hasEmail)
-                    return Ok("Email is not Valid");
+                    return Ok("Email is Already Exist!");
 
                 if (user.Email != requestUser.Email)
                 {
-                    logger.Warn("User Edit: Email is not Valid!");
-                    return Ok("Email is Already Exists");
+                    return Ok("Email is not valid");
                 }
 
                 bool hasNewFile = requestUser.File != null ? true : false;
                 string filename = "";
 
                 if (hasNewFile)
+                {
+                    if (user.Image != null)
+                    {
+                        System.IO.File.Delete(Path.Combine("wwwroot\\UsersImageFiles", user.Image));
+                    }
                     filename = await WriteFile(requestUser.File);
+                }
 
-                var Password = requestUser.Password != null ? requestUser.Password : user.Password;
+                if (requestUser.Password != null)
+                {
+                    if (!PasswordManager.IsTruePassword(requestUser.Password, user.Password))
+                    {
+                        return Ok("Old Password is not Correct!");
+                    }
+                    var newSalt = PasswordManager.GenerateSalt();
+                    newHashedPassword = PasswordManager.HashPassword(requestUser.Password, newSalt) + newSalt;
+                }
 
                 user.Name = requestUser.Name;
                 user.Email = requestUser.Email;
                 user.Phone = requestUser.Phone;
-                user.Password = Password;
+                user.Password = requestUser.Password != null ? newHashedPassword : user.Password;
                 user.Image = hasNewFile == true ? filename : user.Image;
 
                 await context.SaveChangesAsync();
