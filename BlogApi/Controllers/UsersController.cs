@@ -1,6 +1,7 @@
 ﻿using BlogApi.Helpers;
 using BlogApi.Models;
 using log4net;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -13,11 +14,13 @@ namespace BlogApi.Controllers
     {
         private readonly ILog logger;
         private readonly BlogApiContext context;
+        private readonly IConfiguration configuration;
 
-        public UsersController(ILog logger, BlogApiContext context)
+        public UsersController(ILog logger, BlogApiContext context, IConfiguration configuration)
         {
             this.logger = logger;
             this.context = context;
+            this.configuration = configuration;
         }
 
         [HttpGet]
@@ -34,6 +37,7 @@ namespace BlogApi.Controllers
             }
         }
 
+        [Authorize]
         [HttpGet("{id}")]
         public async Task<IActionResult> Show(int id)
         {
@@ -88,7 +92,7 @@ namespace BlogApi.Controllers
                 await context.Users.AddAsync(newUser);
                 await context.SaveChangesAsync();
 
-                return Ok(newUser);
+                return Ok(TokenManager.CreateToken(configuration));
             }
             catch (Exception ex)
             {
